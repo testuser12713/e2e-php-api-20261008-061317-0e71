@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+         cacheDirectory=".phpunit.cache">
+    <!-- App\Tests\ is autoloaded via composer.json's autoload-dev (PSR-4 -> tests/),
+         which the bootstrap above activates. -->
+    <testsuites>
+        <testsuite name="bookmarks-api">
+            <directory>tests</directory>
+        </testsuite>
+    </testsuites>
+</phpunit>

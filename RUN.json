@@ -1,0 +1,36 @@
+{
+    "runcontract": 1,
+    "services": [
+        {
+            "name": "api",
+            "dir": ".",
+            "stack": "php",
+            "kind": "server",
+            "install": [
+                ["composer", "install", "--no-interaction", "--no-progress"]
+            ],
+            "test": [
+                ["php", "vendor/bin/phpunit"]
+            ],
+            "start": [
+                "php", "-S", "0.0.0.0:${PORT}", "public/index.php"
+            ],
+            "port": 8000,
+            "port_env": "PORT",
+            "health": {
+                "path": "/api/health",
+                "expect_status": [200]
+            },
+            "env": {
+                "PORT": {
+                    "dev": "8000"
+                },
+                "DB_PATH": {
+                    "dev": "data/bookmarks.sqlite",
+                    "not_secret": true,
+                    "why": "Filesystem path to the local SQLite file where bookmarks are stored; it is not a credential. The storage layer reads it lazily and defaults to data/bookmarks.sqlite when unset."
+                }
+            }
+        }
+    ]
+}
