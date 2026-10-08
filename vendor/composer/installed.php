@@ -3,7 +3,7 @@
         'name' => 'office/php-bookmarks-api',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => 'd5b8d510c2cee3255cf9600415f39169884be25f',
+        'reference' => 'a00dcca62ad23e49373eaae234598c212b06d1d2',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -31,7 +31,7 @@
         'office/php-bookmarks-api' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => 'd5b8d510c2cee3255cf9600415f39169884be25f',
+            'reference' => 'a00dcca62ad23e49373eaae234598c212b06d1d2',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
