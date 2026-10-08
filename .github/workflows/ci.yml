@@ -1,0 +1,115 @@
+# office-crew-ci-gates: strict-v10
+# Auto-generated for composed products v2 (GitHub Actions).
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+jobs:
+  api-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: bash
+        run: |
+          python3 - "$RUNNER_TEMP/.office-crew-ci" <<'OFFICE_CREW_PLAN'
+          import json, os, re, secrets, shlex, sys
+
+          SERVICES = [{'prefix': 'api', 'name': 'api', 'dir': '.', 'stack': 'php', 'install': [['composer', 'install', '--no-interaction', '--no-progress']], 'build': [], 'test': [['php', 'vendor/bin/phpunit']]}]
+          DATABASES = {'postgres': 'DATABASE_URL', 'valkey': 'VALKEY_URL'}
+          ROLES = ("install", "build", "test", "lint", "typecheck")
+          PLACEHOLDER = re.compile(r"\$\{([^}]*)\}")
+
+          def norm(d):
+              d = str(d or ".").replace("\\", "/").strip().strip("/")
+              return d or "."
+
+          def depth(d):
+              return 0 if d == "." else d.count("/") + 1
+
+          def declared_for(want, stack, declared):
+              same = [s for s in declared if s.get("stack") == stack]
+              exact = [s for s in same if norm(s.get("dir")) == want]
+              if exact:
+                  return exact[0]
+              around = [
+                  s for s in same
+                  if norm(s.get("dir")) == "." or want.startswith(norm(s.get("dir")) + "/")
+              ]
+              return max(around, key=lambda s: depth(norm(s.get("dir"))), default={})
+
+          def shell(value, dbs):
+              out, rest = [], value
+              while True:
+                  found = [(rest.find("${service:%s.url}" % n), n) for n in dbs]
+                  found = [(at, n) for at, n in found if at >= 0]
+                  if not found:
+                      break
+                  at, name = min(found)
+                  if at:
+                      out.append(shlex.quote(rest[:at]))
+                  out.append('"${%s}"' % DATABASES.get(dbs[name], "OFFICE_CREW_NO_SUCH_DATABASE"))
+                  rest = rest[at + len("${service:%s.url}" % name):]
+              if rest or not out:
+                  out.append(shlex.quote(rest))
+              return "".join(out)
+
+          def command(argv, where, dbs):
+              if not isinstance(argv, list) or not argv or not all(isinstance(a, str) for a in argv):
+                  sys.exit("%s: not a list of arguments" % where)
+              for token in argv:
+                  for name in PLACEHOLDER.findall(token):
+                      known = name.startswith("service:") and name[8:-4] in dbs and name.endswith(".url")
+                      if name != "PORT" and not known:
+                          sys.exit("%s: ${%s} cannot be resolved in the pipeline" % (where, name))
+              return " ".join(shell(a.replace("${PORT}", "0"), dbs) for a in argv)
+
+          def environment(svc):
+              out = {"CI": "1", "NO_COLOR": "1", "DOTNET_CLI_TELEMETRY_OPTOUT": "1"}
+              env = svc.get("env") if isinstance(svc.get("env"), dict) else {}
+              for key, spec in env.items():
+                  if not isinstance(spec, dict) or spec.get("external"):
+                      continue
+                  if spec.get("generate"):
+                      size = 16 if spec["generate"] == "uuid4" else int(spec.get("bytes") or 32)
+                      out[key] = secrets.token_hex(size)
+                  else:
+                      out[key] = str(spec.get("dev", "")).replace("${PORT}", "0")
+              return out
+
+          try:
+              with open("RUN.json", encoding="utf-8") as f:
+                  doc = json.load(f)
+          except FileNotFoundError:
+              doc = {}
+          except ValueError as e:
+              sys.exit("RUN.json is not readable JSON: %s" % e)
+          declared = []
+          if isinstance(doc, dict) and doc.get("runcontract") == 1 and isinstance(doc.get("services"), list):
+              declared = [s for s in doc["services"] if isinstance(s, dict)]
+          dbs = {s.get("name"): s.get("engine") for s in declared if s.get("kind") == "database"}
+
+          os.makedirs(sys.argv[1], exist_ok=True)
+          for item in SERVICES:
+              svc = declared_for(norm(item["dir"]), item["stack"], declared)
+              lines = ["set -e", "cd " + shlex.quote(norm(item["dir"]))]
+              lines += ["export %s=%s" % (k, shell(v, dbs)) for k, v in environment(svc).items()]
+              tested = False
+              for role in ROLES:
+                  own = svc.get(role) or []
+                  for argv in own or item.get(role, []):
+                      cmd = command(argv, "%s.%s" % (svc.get("name") or item["name"], role), dbs)
+                      origin = "RUN.json" if own else "stack default"
+                      lines += ["echo " + shlex.quote("$ %s  (%s, %s)" % (cmd, role, origin)), cmd]
+                      tested = tested or role == "test"
+              if not tested:
+                  lines.append("echo " + shlex.quote(
+                      "No test declared in RUN.json and no default for the %s stack: nothing was "
+                      "tested here." % item["stack"]
+                  ))
+              path = os.path.join(sys.argv[1], item["prefix"] + ".sh")
+              with open(path, "w", encoding="utf-8", newline="\n") as f:
+                  f.write("\n".join(lines) + "\n")
+              print("planned %s: %s in %s" % (item["prefix"], item["stack"], norm(item["dir"])))
+          OFFICE_CREW_PLAN
+          podman run --rm -v "$GITHUB_WORKSPACE:/work" -v "$RUNNER_TEMP/.office-crew-ci:/.office-crew-ci:ro" -w /work docker.io/library/composer:2 sh /.office-crew-ci/api.sh
